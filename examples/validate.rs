@@ -26,7 +26,7 @@ fn get_digest(buffer: &[u8]) -> [u32; 4] {
 fn main() {
     let source = include_str!("copy.hlsl");
 
-    let mut dxil = compile_hlsl("copy.hlsl", source, "copyCs", "cs_6_0", &[], &[]).unwrap();
+    let mut dxil = compile_hlsl("copy.hlsl", source, Some("copyCs"), "cs_6_0", &[], &[]).unwrap();
 
     zero_digest(&mut dxil);
 

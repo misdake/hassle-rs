@@ -263,7 +263,7 @@ impl DxcCompiler {
         &self,
         blob: &DxcBlobEncoding,
         source_name: &str,
-        entry_point: &str,
+        entry_point: Option<&str>,
         target_profile: &str,
         args: &[&str],
         include_handler: Option<&mut dyn DxcIncludeHandler>,
@@ -286,12 +286,15 @@ impl DxcCompiler {
             .as_ref()
             .map(|i| i.query_interface().unwrap());
 
+        let entry_point = entry_point.map(|entry_point| to_wide(entry_point));
+        let entry_point = entry_point.as_ref().map_or(std::ptr::null(), |entry_point| entry_point.as_ptr());
+
         let mut result = None;
         let result_hr = unsafe {
             self.inner.compile(
                 &blob.inner,
                 to_wide(source_name).as_ptr(),
-                to_wide(entry_point).as_ptr(),
+                entry_point,
                 to_wide(target_profile).as_ptr(),
                 dxc_args.as_ptr(),
                 dxc_args.len() as u32,

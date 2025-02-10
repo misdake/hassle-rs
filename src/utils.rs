@@ -109,7 +109,7 @@ impl HRESULT {
 pub fn compile_hlsl(
     source_name: &str,
     shader_text: &str,
-    entry_point: &str,
+    entry_point: Option<&str>,
     target_profile: &str,
     args: &[&str],
     defines: &[(&str, Option<&str>)],

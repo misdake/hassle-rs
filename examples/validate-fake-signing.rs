@@ -24,7 +24,7 @@ fn main() {
 
     for (idx, source) in sources.iter().enumerate() {
         println!("Testing file: {}", idx);
-        let mut dxil = compile_hlsl("copy.hlsl", source, "copyCs", "cs_6_0", &[], &[]).unwrap();
+        let mut dxil = compile_hlsl("copy.hlsl", source, Some("copyCs"), "cs_6_0", &[], &[]).unwrap();
 
         let without_digest = get_digest(&dxil);
 

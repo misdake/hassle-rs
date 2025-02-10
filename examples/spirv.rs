@@ -5,7 +5,7 @@ use rspirv::dr::load_bytes;
 fn main() {
     let source = include_str!("copy.hlsl");
 
-    match compile_hlsl("copy.hlsl", source, "copyCs", "cs_6_0", &["-spirv"], &[]) {
+    match compile_hlsl("copy.hlsl", source, Some("copyCs"), "cs_6_0", &["-spirv"], &[]) {
         Ok(spirv) => {
             let module = load_bytes(spirv).unwrap();
             println!("{}", module.disassemble());
