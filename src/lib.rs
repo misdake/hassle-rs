@@ -28,7 +28,7 @@
 //! let ir = compile_hlsl(
 //!     "shader_filename.hlsl",
 //!     code,
-//!     "copyCs",
+//!     Some("copyCs"),
 //!     "cs_6_1",
 //!     &vec!["-spirv"],
 //!     &vec![
@@ -49,3 +49,82 @@ pub mod intellisense;
 pub use crate::ffi::*;
 pub use crate::utils::{compile_hlsl, fake_sign_dxil_in_place, validate_dxil, HassleError, Result};
 pub use crate::wrapper::*;
+
+pub struct DxcPack {
+    dxc: Dxc,
+    compiler: DxcCompiler,
+    library: DxcLibrary,
+    dxil: Dxil,
+    validator: DxcValidator,
+}
+
+impl DxcPack {
+    pub fn create() -> Result<Self> {
+        let dxc = Dxc::new(None)?;
+
+        let compiler = dxc.create_compiler()?;
+        let library = dxc.create_library()?;
+        let dxil = Dxil::new(None)?;
+        let validator = dxil.create_validator()?;
+
+        Ok(Self {
+            dxc,
+            compiler,
+            library,
+            dxil,
+            validator,
+        })
+    }
+
+    pub fn compile_validate(
+        &self,
+        source_name: &str,
+        shader_text: &str,
+        entry_point: Option<&str>,
+        target_profile: &str,
+        args: &[&str],
+        defines: &[(&str, Option<&str>)],
+    ) -> Result<DxcBlob> {
+        use crate::utils::DefaultIncludeHandler;
+
+        let blob = self
+            .library
+            .create_blob_with_encoding_from_str(shader_text)?;
+
+        let result = self.compiler.compile(
+            &blob,
+            source_name,
+            entry_point,
+            target_profile,
+            args,
+            Some(&mut DefaultIncludeHandler {}),
+            defines,
+        );
+
+        match result {
+            Err(result) => {
+                let error_blob = result.0.get_error_buffer()?;
+                Err(HassleError::CompileError(
+                    self.library.get_blob_as_string(&error_blob.into())?,
+                ))
+            }
+            Ok(result) => {
+                let result_blob = result.get_result()?;
+
+                let blob_encoding = self.compiler.disassemble(&result_blob)?;
+
+                let result_blob = match self.validator.validate(blob_encoding.into()) {
+                    Ok(blob) => blob,
+                    Err(result) => {
+                        let error_blob = result.0.get_error_buffer()?;
+                        return Err(HassleError::ValidationError(
+                            self.library.get_blob_as_string(&error_blob.into())?,
+                        ));
+                    }
+                };
+
+                Ok(result_blob)
+            }
+        }
+    }
+}
