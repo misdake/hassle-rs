@@ -49,30 +49,42 @@ pub mod intellisense;
 pub use crate::ffi::*;
 pub use crate::utils::{compile_hlsl, fake_sign_dxil_in_place, validate_dxil, HassleError, Result};
 pub use crate::wrapper::*;
+use std::mem::ManuallyDrop;
 
 pub struct DxcPack {
-    dxc: Dxc,
-    compiler: DxcCompiler,
-    library: DxcLibrary,
-    dxil: Dxil,
-    validator: DxcValidator,
+    dxc: ManuallyDrop<Dxc>,
+    compiler: ManuallyDrop<DxcCompiler>,
+    library: ManuallyDrop<DxcLibrary>,
+    dxil: ManuallyDrop<Dxil>,
+    validator: ManuallyDrop<DxcValidator>,
+}
+impl Drop for DxcPack {
+    fn drop(&mut self) {
+        unsafe {
+            ManuallyDrop::drop(&mut self.validator);
+            ManuallyDrop::drop(&mut self.dxil);
+            ManuallyDrop::drop(&mut self.library);
+            ManuallyDrop::drop(&mut self.compiler);
+            ManuallyDrop::drop(&mut self.dxc);
+        }
+    }
 }
 
 impl DxcPack {
     pub fn create() -> Result<Self> {
         let dxc = Dxc::new(None)?;
-
         let compiler = dxc.create_compiler()?;
         let library = dxc.create_library()?;
+
         let dxil = Dxil::new(None)?;
         let validator = dxil.create_validator()?;
 
         Ok(Self {
-            dxc,
-            compiler,
-            library,
-            dxil,
-            validator,
+            dxc: ManuallyDrop::new(dxc),
+            compiler: ManuallyDrop::new(compiler),
+            library: ManuallyDrop::new(library),
+            dxil: ManuallyDrop::new(dxil),
+            validator: ManuallyDrop::new(validator),
         })
     }
 
@@ -84,7 +96,7 @@ impl DxcPack {
         target_profile: &str,
         args: &[&str],
         defines: &[(&str, Option<&str>)],
-    ) -> Result<DxcBlob> {
+    ) -> Result<Vec<u8>> {
         use crate::utils::DefaultIncludeHandler;
 
         let blob = self
@@ -109,9 +121,9 @@ impl DxcPack {
                 ))
             }
             Ok(result) => {
-                let result_blob = result.get_result()?;
+                let data = result.get_result()?.to_vec();
 
-                let blob_encoding = self.compiler.disassemble(&result_blob)?;
+                let blob_encoding = self.library.create_blob_with_encoding(&data)?;
 
                 let result_blob = match self.validator.validate(blob_encoding.into()) {
                     Ok(blob) => blob,
@@ -123,7 +135,7 @@ impl DxcPack {
                     }
                 };
 
-                Ok(result_blob)
+                Ok(result_blob.to_vec())
             }
         }
     }
